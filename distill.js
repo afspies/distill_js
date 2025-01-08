@@ -1100,7 +1100,6 @@
     // if authors, no byline -> add byline
   
     function optionalComponents(dom, data) {
-        console.log('[Distill] Starting optional components setup');
         const body = dom.body;
         const article = body.querySelector('d-article');
         const distillArticle = body.querySelector('.distill-article');
@@ -1111,7 +1110,6 @@
           return;
         }
       
-        console.log('[Distill] Found article:', article);
       
         // Find the container by getting the article's parent chain
         let container = article;
@@ -1127,24 +1125,16 @@
           });
         }
       
-        console.log('[Distill] Container depth:', containerDepth);
-        console.log('[Distill] Parent chain:', parentChain);
-        console.log('[Distill] Final container:', container);
-      
         let byline = dom.querySelector('d-byline');
         if (!byline) {
           if (data.authors) {
-            console.log('[Distill] Creating byline for authors:', data.authors);
             byline = dom.createElement('d-byline');
             
             // If article is nested, insert at same nesting level
             if (containerDepth > 0) {
-              console.log('[Distill] Inserting byline into nested container');
               container.insertBefore(byline, article);
             } else {
-              console.log('[Distill] Using default byline insertion');
               const insertPoint = distillArticle || article;
-              console.log('[Distill] Insert point:', insertPoint);
               insertPoint.parentNode.insertBefore(byline, insertPoint);
             }
             console.log('[Distill] Byline inserted:', byline);
