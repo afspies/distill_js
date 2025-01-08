@@ -1100,40 +1100,59 @@
     // if authors, no byline -> add byline
   
     function optionalComponents(dom, data) {
-        console.log('Running with changes');
+        console.log('[Distill] Starting optional components setup');
         const body = dom.body;
         const article = body.querySelector('d-article');
         const distillArticle = body.querySelector('.distill-article');
       
         // If we don't have an article tag, something weird is going on—giving up.
         if (!article) {
-          console.warn('No d-article tag found; skipping adding optional components!');
+          console.warn('[Distill] No d-article tag found; skipping adding optional components!');
           return;
         }
+      
+        console.log('[Distill] Found article:', article);
       
         // Find the container by getting the article's parent chain
         let container = article;
         let containerDepth = 0;
+        let parentChain = [];
+        
         while (container.parentElement && container.parentElement !== body) {
           container = container.parentElement;
           containerDepth++;
+          parentChain.push({
+            tagName: container.tagName,
+            className: container.className
+          });
         }
+      
+        console.log('[Distill] Container depth:', containerDepth);
+        console.log('[Distill] Parent chain:', parentChain);
+        console.log('[Distill] Final container:', container);
       
         let byline = dom.querySelector('d-byline');
         if (!byline) {
           if (data.authors) {
+            console.log('[Distill] Creating byline for authors:', data.authors);
             byline = dom.createElement('d-byline');
+            
             // If article is nested, insert at same nesting level
             if (containerDepth > 0) {
+              console.log('[Distill] Inserting byline into nested container');
               container.insertBefore(byline, article);
             } else {
-              // Otherwise fall back to original behavior
+              console.log('[Distill] Using default byline insertion');
               const insertPoint = distillArticle || article;
+              console.log('[Distill] Insert point:', insertPoint);
               insertPoint.parentNode.insertBefore(byline, insertPoint);
             }
+            console.log('[Distill] Byline inserted:', byline);
           } else {
-            console.warn('No authors found in front matter; please add them before submission!');
+            console.warn('[Distill] No authors found in front matter; please add them before submission!');
           }
+        } else {
+          console.log('[Distill] Existing byline found:', byline);
         }
       
         let title = dom.querySelector('d-title');
@@ -1606,8 +1625,6 @@
   }
   
   </style>
-  
-  `, false);
   
     class Appendix extends T$2(HTMLElement) {
   
@@ -2196,605 +2213,6 @@
   `
     );
   
-    class Cite extends T$3(HTMLElement) {
-      /* Lifecycle */
-      constructor() {
-        super();
-        this._numbers = [];
-        this._entries = [];
-      }
-  
-      connectedCallback() {
-        this.outerSpan = this.root.querySelector("#citation-");
-        this.innerSpan = this.root.querySelector(".citation-number");
-        this.hoverBox = this.root.querySelector("d-hover-box");
-        window.customElements.whenDefined("d-hover-box").then(() => {
-          this.hoverBox.listen(this);
-        });
-        // in case this component got connected after values were set
-        if (this.numbers) {
-          this.displayNumbers(this.numbers);
-        }
-        if (this.entries) {
-          this.displayEntries(this.entries);
-        }
-      }
-  
-      //TODO This causes an infinite loop on firefox with polyfills.
-      // This is only needed for interactive editing so no priority.
-      // disconnectedCallback() {
-      // const options = { detail: [this, this.keys], bubbles: true };
-      // const event = new CustomEvent('onCiteKeyRemoved', options);
-      // document.dispatchEvent(event);
-      // }
-  
-      /* observe 'key' attribute */
-  
-      static get observedAttributes() {
-        return ["key", "bibtex-key"];
-      }
-  
-      attributeChangedCallback(name, oldValue, newValue) {
-        const eventName = oldValue ? "onCiteKeyChanged" : "onCiteKeyCreated";
-        const keys = newValue.split(",").map(k => k.trim());
-        const options = { detail: [this, keys], bubbles: true };
-        const event = new CustomEvent(eventName, options);
-        document.dispatchEvent(event);
-      }
-  
-      set key(value) {
-        this.setAttribute("key", value);
-      }
-  
-      get key() {
-        return this.getAttribute("key") || this.getAttribute("bibtex-key");
-      }
-  
-      get keys() {
-        const result = this.key.split(",");
-        console.log(result);
-        return result;
-      }
-  
-      /* Setters & Rendering */
-  
-      set numbers(numbers) {
-        this._numbers = numbers;
-        this.displayNumbers(numbers);
-      }
-  
-      get numbers() {
-        return this._numbers;
-      }
-  
-      displayNumbers(numbers) {
-        if (!this.innerSpan) return;
-        const numberStrings = numbers.map(index => {
-          return index == -1 ? "?" : index + 1 + "";
-        });
-        const textContent = "[" + numberStrings.join(", ") + "]";
-        this.innerSpan.textContent = textContent;
-      }
-  
-      set entries(entries) {
-        this._entries = entries;
-        this.displayEntries(entries);
-      }
-  
-      get entries() {
-        return this._entries;
-      }
-  
-      displayEntries(entries) {
-        if (!this.hoverBox) return;
-        this.hoverBox.innerHTML = `<ul>
-        ${entries
-          .map(hover_cite)
-          .map(html => `<li>${html}</li>`)
-          .join("\n")}
-      </ul>`;
-      }
-    }
-  
-    // Copyright 2018 The Distill Template Authors
-  
-    const styles$1 = `
-  d-citation-list {
-    contain: style;
-  }
-  
-  d-citation-list .references {
-    grid-column: text;
-  }
-  
-  d-citation-list .references .title {
-    font-weight: 500;
-  }
-  `;
-  
-    function renderCitationList(element, entries, dom=document) {
-      if (entries.size > 0) {
-        element.style.display = '';
-        let list = element.querySelector('.references');
-        if (list) {
-          list.innerHTML = '';
-        } else {
-          const stylesTag = dom.createElement('style');
-          stylesTag.innerHTML = styles$1;
-          element.appendChild(stylesTag);
-  
-          const heading = dom.createElement('h3');
-          heading.id = 'references';
-          heading.textContent = 'References';
-          element.appendChild(heading);
-  
-          list = dom.createElement('ol');
-          list.id = 'references-list';
-          list.className = 'references';
-          element.appendChild(list);
-        }
-  
-        for (const [key, entry] of entries) {
-          const listItem = dom.createElement('li');
-          listItem.id = key;
-          listItem.innerHTML = bibliography_cite(entry);
-          list.appendChild(listItem);
-        }
-      } else {
-        element.style.display = 'none';
-      }
-    }
-  
-    class CitationList extends HTMLElement {
-  
-      static get is() { return 'd-citation-list'; }
-  
-      connectedCallback() {
-        if (!this.hasAttribute('distill-prerendered')) {
-          this.style.display = 'none';
-        }
-      }
-  
-      set citations(citations) {
-        renderCitationList(this, citations);
-      }
-  
-    }
-  
-    var prism = createCommonjsModule(function (module) {
-    /* **********************************************
-         Begin prism-core.js
-    ********************************************** */
-  
-    var _self = (typeof window !== 'undefined')
-        ? window   // if in browser
-        : (
-            (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope)
-            ? self // if in worker
-            : {}   // if in node js
-        );
-  
-    /**
-     * Prism: Lightweight, robust, elegant syntax highlighting
-     * MIT license http://www.opensource.org/licenses/mit-license.php/
-     * @author Lea Verou http://lea.verou.me
-     */
-  
-    var Prism = (function (_self){
-  
-    // Private helper vars
-    var lang = /\blang(?:uage)?-([\w-]+)\b/i;
-    var uniqueId = 0;
-  
-  
-    var _ = {
-        manual: _self.Prism && _self.Prism.manual,
-        disableWorkerMessageHandler: _self.Prism && _self.Prism.disableWorkerMessageHandler,
-        util: {
-            encode: function encode(tokens) {
-                if (tokens instanceof Token) {
-                    return new Token(tokens.type, encode(tokens.content), tokens.alias);
-                } else if (Array.isArray(tokens)) {
-                    return tokens.map(encode);
-                } else {
-                    return tokens.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\u00a0/g, ' ');
-                }
-            },
-  
-            type: function (o) {
-                return Object.prototype.toString.call(o).slice(8, -1);
-            },
-  
-            objId: function (obj) {
-                if (!obj['__id']) {
-                    Object.defineProperty(obj, '__id', { value: ++uniqueId });
-                }
-                return obj['__id'];
-            },
-  
-            // Deep clone a language definition (e.g. to extend it)
-            clone: function deepClone(o, visited) {
-                var clone, id, type = _.util.type(o);
-                visited = visited || {};
-  
-                switch (type) {
-                    case 'Object':
-                        id = _.util.objId(o);
-                        if (visited[id]) {
-                            return visited[id];
-                        }
-                        clone = {};
-                        visited[id] = clone;
-  
-                        for (var key in o) {
-                            if (o.hasOwnProperty(key)) {
-                                clone[key] = deepClone(o[key], visited);
-                            }
-                        }
-  
-                        return clone;
-  
-                    case 'Array':
-                        id = _.util.objId(o);
-                        if (visited[id]) {
-                            return visited[id];
-                        }
-                        clone = [];
-                        visited[id] = clone;
-  
-                        o.forEach(function (v, i) {
-                            clone[i] = deepClone(v, visited);
-                        });
-  
-                        return clone;
-  
-                    default:
-                        return o;
-                }
-            },
-  
-            /**
-             * Returns the Prism language of the given element set by a `language-xxxx` or `lang-xxxx` class.
-             *
-             * If no language is set for the element or the element is `null` or `undefined`, `none` will be returned.
-             *
-             * @param {Element} element
-             * @returns {string}
-             */
-            getLanguage: function (element) {
-                while (element && !lang.test(element.className)) {
-                    element = element.parentElement;
-                }
-                if (element) {
-                    return (element.className.match(lang) || [, 'none'])[1].toLowerCase();
-                }
-                return 'none';
-            },
-  
-            /**
-             * Returns the script element that is currently executing.
-             *
-             * This does __not__ work for line script element.
-             *
-             * @returns {HTMLScriptElement | null}
-             */
-            currentScript: function () {
-                if (typeof document === 'undefined') {
-                    return null;
-                }
-                if ('currentScript' in document) {
-                    return document.currentScript;
-                }
-  
-                // IE11 workaround
-                // we'll get the src of the current script by parsing IE11's error stack trace
-                // this will not work for inline scripts
-  
-                try {
-                    throw new Error();
-                } catch (err) {
-                    // Get file src url from stack. Specifically works with the format of stack traces in IE.
-                    // A stack will look like this:
-                    //
-                    // Error
-                    //    at _.util.currentScript (http://localhost/components/prism-core.js:119:5)
-                    //    at Global code (http://localhost/components/prism-core.js:606:1)
-  
-                    var src = (/at [^(\r\n]*\((.*):.+:.+\)$/i.exec(err.stack) || [])[1];
-                    if (src) {
-                        var scripts = document.getElementsByTagName('script');
-                        for (var i in scripts) {
-                            if (scripts[i].src == src) {
-                                return scripts[i];
-                            }
-                        }
-                    }
-                    return null;
-                }
-            }
-        },
-  
-        languages: {
-            extend: function (id, redef) {
-                var lang = _.util.clone(_.languages[id]);
-  
-                for (var key in redef) {
-                    lang[key] = redef[key];
-                }
-  
-                return lang;
-            },
-  
-            /**
-             * Insert a token before another token in a language literal
-             * As this needs to recreate the object (we cannot actually insert before keys in object literals),
-             * we cannot just provide an object, we need an object and a key.
-             * @param inside The key (or language id) of the parent
-             * @param before The key to insert before.
-             * @param insert Object with the key/value pairs to insert
-             * @param root The object that contains `inside`. If equal to Prism.languages, it can be omitted.
-             */
-            insertBefore: function (inside, before, insert, root) {
-                root = root || _.languages;
-                var grammar = root[inside];
-                var ret = {};
-  
-                for (var token in grammar) {
-                    if (grammar.hasOwnProperty(token)) {
-  
-                        if (token == before) {
-                            for (var newToken in insert) {
-                                if (insert.hasOwnProperty(newToken)) {
-                                    ret[newToken] = insert[newToken];
-                                }
-                            }
-                        }
-  
-                        // Do not insert token which also occur in insert. See #1525
-                        if (!insert.hasOwnProperty(token)) {
-                            ret[token] = grammar[token];
-                        }
-                    }
-                }
-  
-                var old = root[inside];
-                root[inside] = ret;
-  
-                // Update references in other language definitions
-                _.languages.DFS(_.languages, function(key, value) {
-                    if (value === old && key != inside) {
-                        this[key] = ret;
-                    }
-                });
-  
-                return ret;
-            },
-  
-            // Traverse a language definition with Depth First Search
-            DFS: function DFS(o, callback, type, visited) {
-                visited = visited || {};
-  
-                var objId = _.util.objId;
-  
-                for (var i in o) {
-                    if (o.hasOwnProperty(i)) {
-                        callback.call(o, i, o[i], type || i);
-  
-                        var property = o[i],
-                            propertyType = _.util.type(property);
-  
-                        if (propertyType === 'Object' && !visited[objId(property)]) {
-                            visited[objId(property)] = true;
-                            DFS(property, callback, null, visited);
-                        }
-                        else if (propertyType === 'Array' && !visited[objId(property)]) {
-                            visited[objId(property)] = true;
-                            DFS(property, callback, i, visited);
-                        }
-                    }
-                }
-            }
-        },
-        plugins: {},
-  
-        highlightAll: function(async, callback) {
-            _.highlightAllUnder(document, async, callback);
-        },
-  
-        highlightAllUnder: function(container, async, callback) {
-            var env = {
-                callback: callback,
-                container: container,
-                selector: 'code[class*="language-"], [class*="language-"] code, code[class*="lang-"], [class*="lang-"] code'
-            };
-  
-            _.hooks.run('before-highlightall', env);
-  
-            env.elements = Array.prototype.slice.apply(env.container.querySelectorAll(env.selector));
-  
-            _.hooks.run('before-all-elements-highlight', env);
-  
-            for (var i = 0, element; element = env.elements[i++];) {
-                _.highlightElement(element, async === true, env.callback);
-            }
-        },
-  
-        highlightElement: function(element, async, callback) {
-            // Find language
-            var language = _.util.getLanguage(element);
-            var grammar = _.languages[language];
-  
-            // Set language on the element, if not present
-            element.className = element.className.replace(lang, '').replace(/\s+/g, ' ') + ' language-' + language;
-  
-            // Set language on the parent, for styling
-            var parent = element.parentNode;
-            if (parent && parent.nodeName.toLowerCase() === 'pre') {
-                parent.className = parent.className.replace(lang, '').replace(/\s+/g, ' ') + ' language-' + language;
-            }
-  
-            var code = element.textContent;
-  
-            var env = {
-                element: element,
-                language: language,
-                grammar: grammar,
-                code: code
-            };
-  
-            function insertHighlightedCode(highlightedCode) {
-                env.highlightedCode = highlightedCode;
-  
-                _.hooks.run('before-insert', env);
-  
-                env.element.innerHTML = env.highlightedCode;
-  
-                _.hooks.run('after-highlight', env);
-                _.hooks.run('complete', env);
-                callback && callback.call(env.element);
-            }
-  
-            _.hooks.run('before-sanity-check', env);
-  
-            if (!env.code) {
-                _.hooks.run('complete', env);
-                callback && callback.call(env.element);
-                return;
-            }
-  
-            _.hooks.run('before-highlight', env);
-  
-            if (!env.grammar) {
-                insertHighlightedCode(_.util.encode(env.code));
-                return;
-            }
-  
-            if (async && _self.Worker) {
-                var worker = new Worker(_.filename);
-  
-                worker.onmessage = function(evt) {
-                    insertHighlightedCode(evt.data);
-                };
-  
-                worker.postMessage(JSON.stringify({
-                    language: env.language,
-                    code: env.code,
-                    immediateClose: true
-                }));
-            }
-            else {
-                insertHighlightedCode(_.highlight(env.code, env.grammar, env.language));
-            }
-        },
-  
-        highlight: function (text, grammar, language) {
-            var env = {
-                code: text,
-                grammar: grammar,
-                language: language
-            };
-            _.hooks.run('before-tokenize', env);
-            env.tokens = _.tokenize(env.code, env.grammar);
-            _.hooks.run('after-tokenize', env);
-            return Token.stringify(_.util.encode(env.tokens), env.language);
-        },
-  
-        tokenize: function(text, grammar) {
-            var rest = grammar.rest;
-            if (rest) {
-                for (var token in rest) {
-                    grammar[token] = rest[token];
-                }
-  
-                delete grammar.rest;
-            }
-  
-            var tokenList = new LinkedList();
-            addAfter(tokenList, tokenList.head, text);
-  
-            matchGrammar(text, tokenList, grammar, tokenList.head, 0);
-  
-            return toArray(tokenList);
-        },
-  
-        hooks: {
-            all: {},
-  
-            add: function (name, callback) {
-                var hooks = _.hooks.all;
-  
-                hooks[name] = hooks[name] || [];
-  
-                hooks[name].push(callback);
-            },
-  
-            run: function (name, env) {
-                var callbacks = _.hooks.all[name];
-  
-                if (!callbacks || !callbacks.length) {
-                    return;
-                }
-  
-                for (var i=0, callback; callback = callbacks[i++];) {
-                    callback(env);
-                }
-            }
-        },
-  
-        Token: Token
-    };
-  
-    _self.Prism = _;
-  
-    function Token(type, content, alias, matchedStr, greedy) {
-        this.type = type;
-        this.content = content;
-        this.alias = alias;
-        // Copy of the full string this token was created from
-        this.length = (matchedStr || '').length|0;
-        this.greedy = !!greedy;
-    }
-  
-    Token.stringify = function stringify(o, language) {
-        if (typeof o == 'string') {
-            return o;
-        }
-        if (Array.isArray(o)) {
-            var s = '';
-            o.forEach(function (e) {
-                s += stringify(e, language);
-            });
-            return s;
-        }
-  
-        var env = {
-            type: o.type,
-            content: stringify(o.content, language),
-            tag: 'span',
-            classes: ['token', o.type],
-            attributes: {},
-            language: language
-        };
-  
-        var aliases = o.alias;
-        if (aliases) {
-            if (Array.isArray(aliases)) {
-                Array.prototype.push.apply(env.classes, aliases);
-            } else {
-                env.classes.push(aliases);
-            }
-        }
-  
-        _.hooks.run('wrap', env);
-  
-        var attributes = '';
-        for (var name in env.attributes) {
-            attributes += ' ' + name + '="' + (env.attributes[name] || '').replace(/"/g, '&quot;') + '"';
-        }
-  
-        return '<' + env.tag + ' class="' + env.classes.join(' ') + '"' + attributes + '>' + env.content + '</' + env.tag + '>';
-    };
-  
     /**
      * @param {string} text
      * @param {LinkedList<string | Token>} tokenList
@@ -3240,7 +2658,7 @@
             'property': /[-_a-z\xA0-\uFFFF][-\w\xA0-\uFFFF]*(?=\s*:)/i,
             'important': /!important\b/i,
             'function': /[-a-z0-9]+(?=\()/i,
-            'punctuation': /[(){};:,]/
+            'punctuation': /[{}[\];,]/
         };
   
         Prism.languages.css['atrule'].inside.rest = Prism.languages.css;
